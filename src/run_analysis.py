@@ -39,13 +39,18 @@ def run():
     profile = profile.merge(order_agg, on="user_id", how="left").fillna({"orders": 0, "revenue": 0})
     profile["signup_month"] = profile.signup_date.dt.to_period("M").astype(str)
 
-    # First-session behavior, fixed before outcomes.
-    session_start = events.groupby(["user_id", "session_id"]).event_timestamp.min().reset_index()
-    first_session = session_start.sort_values("event_timestamp").drop_duplicates("user_id")[["user_id", "session_id"]]
-    early = (events.merge(first_session, on=["user_id", "session_id"])
-             .groupby("user_id").event_name.apply(lambda x: (x == "offer_view").sum()).rename("first_session_offer_views"))
+    # Candidate early behavior is measured in session one. Its outcome begins only
+    # after that session ends and uses a complete 14-day window from session start.
+    session_bounds = (events.groupby(["user_id", "session_id"]).event_timestamp
+                      .agg(first_session_start="min", first_session_end="max").reset_index())
+    first_session = (session_bounds.sort_values("first_session_start").drop_duplicates("user_id"))
+    first_session_events = events.merge(first_session[["user_id", "session_id"]], on=["user_id", "session_id"])
+    early = (first_session_events.groupby("user_id").event_name
+             .apply(lambda x: (x == "offer_view").sum()).rename("first_session_offer_views"))
+    profile = profile.merge(first_session[["user_id", "first_session_start", "first_session_end"]], on="user_id", how="left")
     profile = profile.merge(early, on="user_id", how="left")
-    profile["compared_two_offers"] = profile.first_session_offer_views.ge(2)
+    profile["offer_depth_group"] = pd.cut(profile.first_session_offer_views, [-1, 0, 1, 2, np.inf],
+                                           labels=["0", "1", "2", "3+"])
 
     def segment_table(col):
         out = profile.groupby(col, observed=True).agg(acquired_users=("user_id", "size"), purchasers=("purchase", "sum"),
@@ -71,16 +76,33 @@ def run():
     category = category_sessions.groupby("category").agg(exploring_sessions=("viewed", "sum"), purchases=("purchased", "sum")).reset_index()
     category["purchase_per_exploring_session"] = category.purchases / category.exploring_sessions
 
-    activation = profile.groupby("compared_two_offers").agg(users=("user_id", "size"), purchasers=("purchase", "sum"),
-                                                              repeat_buyers=("orders", lambda x: (x >= 2).sum())).reset_index()
-    activation["purchase_rate"] = activation.purchasers / activation.users
-    activation["repeat_buyer_rate"] = activation.repeat_buyers / activation.users
+    outcome_end = events.event_timestamp.max()
+    candidate = profile[profile.first_session_start <= outcome_end - pd.Timedelta(days=14)].copy()
+    order_window = orders.merge(candidate[["user_id", "first_session_start", "first_session_end"]], on="user_id")
+    order_window = order_window[(order_window.order_timestamp > order_window.first_session_end) &
+                                (order_window.order_timestamp <= order_window.first_session_start + pd.Timedelta(days=14))]
+    future = order_window.groupby("user_id").agg(future_orders_14d=("order_id", "nunique"),
+                                                   future_revenue_14d=("order_value", "sum")).reset_index()
+    candidate = candidate.merge(future, on="user_id", how="left").fillna({"future_orders_14d": 0, "future_revenue_14d": 0})
+    candidate["subsequent_purchase_14d"] = candidate.future_orders_14d.gt(0).astype(int)
+    same_session_buyers = set(first_session_events.loc[first_session_events.event_name.eq("purchase"), "user_id"])
+    candidate["purchased_first_session"] = candidate.user_id.isin(same_session_buyers)
+    activation = candidate.groupby("offer_depth_group", observed=True).agg(
+        users=("user_id", "size"), purchasers_14d=("subsequent_purchase_14d", "sum"),
+        avg_future_orders_14d=("future_orders_14d", "mean"), avg_future_revenue_14d=("future_revenue_14d", "mean"),
+        first_session_purchase_rate=("purchased_first_session", "mean")).reset_index()
+    activation["user_share"] = activation.users / activation.users.sum()
+    activation["subsequent_purchase_rate_14d"] = activation.purchasers_14d / activation.users
+    activation["ci_low"], activation["ci_high"] = wilson_interval(activation.purchasers_14d, activation.users)
 
-    # Regression adjusts the activation association for observed mix; it is not causal.
-    model_df = profile.assign(purchased=profile.purchase.astype(int))
-    model = smf.logit("purchased ~ compared_two_offers + C(acquisition_channel) + C(device_type) + C(country) + C(signup_month)", data=model_df).fit(disp=False)
-    activation_or = float(np.exp(model.params["compared_two_offers[T.True]"]))
-    activation_ci = np.exp(model.conf_int().loc["compared_two_offers[T.True]"]).tolist()
+    composition = (candidate.groupby(["offer_depth_group", "acquisition_channel"], observed=True).size()
+                   .rename("users").reset_index())
+    composition["within_depth_share"] = composition.users / composition.groupby("offer_depth_group", observed=True).users.transform("sum")
+
+    # Adjustment checks observed mix; the planted synthetic mechanism and latent
+    # intent mean these coefficients cannot be interpreted as causal effects.
+    model_df = candidate.copy()
+    model = smf.logit("subsequent_purchase_14d ~ C(offer_depth_group, Treatment(reference='0')) + C(acquisition_channel) + C(device_type) + C(country) + C(signup_month)", data=model_df).fit(disp=False)
     dcounts = checkout.set_index("device_type")
     z_stat, p_value = proportions_ztest(dcounts.purchases, dcounts.checkouts)
 
@@ -129,20 +151,29 @@ def run():
     for ax in axes: ax.tick_params(axis="x", rotation=35); ax.set_xlabel("")
     axes[0].legend(fontsize=8, frameon=False); axes[1].legend(fontsize=8, frameon=False); sns.despine(); fig.savefig(FIGURES / "cohort_mix.png"); plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    act_plot = activation.copy(); act_plot["label"] = np.where(act_plot.compared_two_offers, "2+ offer views", "0–1 offer view")
-    ax.bar(act_plot.label, act_plot.purchase_rate * 100, color=["#9AA6B2", "#20639B"])
-    ax.set_title("Early offer comparison is a strong activation signal, not yet a causal lever")
-    ax.set_ylabel("User purchase rate (%)"); ax.set_xlabel(""); sns.despine(); fig.savefig(FIGURES / "activation.png"); plt.close(fig)
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    x = np.arange(len(activation))
+    rates = activation.subsequent_purchase_rate_14d * 100
+    ax.errorbar(x, rates,
+                yerr=np.vstack([(activation.subsequent_purchase_rate_14d-activation.ci_low)*100,
+                                (activation.ci_high-activation.subsequent_purchase_rate_14d)*100]),
+                fmt="o", markersize=10, linewidth=2, capsize=5, color="#20639B")
+    labels = [f"{g} {'view' if str(g) == '1' else 'views'}\n(n={n:,})"
+              for g, n in zip(activation.offer_depth_group, activation.users)]
+    ax.set_xticks(x, labels)
+    ax.set_title("Deeper first-session offer exploration is associated with more subsequent 14-day purchasing")
+    ax.set_ylabel("Subsequent purchase rate (95% CI)"); ax.set_xlabel("First-session offer views")
+    sns.despine(); fig.savefig(FIGURES / "early_offer_depth.png"); plt.close(fig)
 
     for name, frame in {"funnel": funnel, "channel_metrics": channel, "device_metrics": device,
                         "checkout_completion": checkout, "cohort_metrics": cohort, "category_metrics": category,
-                        "activation_metrics": activation}.items():
+                        "early_offer_depth_metrics": activation,
+                        "early_offer_depth_channel_mix": composition}.items():
         frame.to_csv(PROCESSED / f"{name}.csv", index=False)
     model_summary = pd.DataFrame({"term": model.params.index, "odds_ratio": np.exp(model.params.values),
                                   "ci_low": np.exp(model.conf_int()[0].values), "ci_high": np.exp(model.conf_int()[1].values),
                                   "p_value": model.pvalues.values})
-    model_summary.to_csv(PROCESSED / "activation_logit.csv", index=False)
+    model_summary.to_csv(PROCESSED / "early_offer_depth_logit.csv", index=False)
 
     paid = channel.set_index("acquisition_channel").loc["paid_social"]
     direct = channel.set_index("acquisition_channel").loc["direct"]
@@ -157,9 +188,16 @@ def run():
         "direct_purchase_rate": float(direct.purchase_rate), "paid_social_revenue_per_user": float(paid.revenue_per_user),
         "mobile_checkout_completion": float(mobile.purchases/mobile.checkouts),
         "desktop_checkout_completion": float(desktop.purchases/desktop.checkouts), "device_test_p": float(p_value),
-        "activation_purchase_rate_low": float(activation.loc[~activation.compared_two_offers, "purchase_rate"].iloc[0]),
-        "activation_purchase_rate_high": float(activation.loc[activation.compared_two_offers, "purchase_rate"].iloc[0]),
-        "activation_adjusted_odds_ratio": activation_or, "activation_or_ci": activation_ci,
+        "activation_eligible_users_14d": int(len(candidate)),
+        "activation_immature_excluded": int(profile.first_session_start.notna().sum() - len(candidate)),
+        "activation_no_observed_session_excluded": int(profile.first_session_start.isna().sum()),
+        "activation_same_session_buyers_excluded_from_outcome": int(candidate.purchased_first_session.sum()),
+        "offer_depth_groups": {str(r.offer_depth_group): {"users": int(r.users), "user_share": float(r.user_share),
+            "subsequent_purchase_rate_14d": float(r.subsequent_purchase_rate_14d), "ci_low": float(r.ci_low),
+            "ci_high": float(r.ci_high)} for _, r in activation.iterrows()},
+        "offer_depth_adjusted_odds_ratios": {row.term: {"odds_ratio": float(row.odds_ratio), "ci_low": float(row.ci_low),
+            "ci_high": float(row.ci_high), "p_value": float(row.p_value)} for _, row in model_summary.iterrows()
+            if "offer_depth_group" in row.term},
         "repeat_purchase_rate_60d": float(repeat_rate),
     }
     (PROCESSED / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

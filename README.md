@@ -8,7 +8,7 @@ First, acquisition mix shifted toward paid social. That channel supplied 9,603 u
 
 Second, users who reach checkout are materially less likely to finish on mobile: 66.2% session-level completion versus 84.4% on desktop. This is the clearest product-friction signal because it appears after users have expressed purchase intent. The evidence does not prove that the interface causes the gap; payment mix, context, and device performance remain plausible alternatives.
 
-The recommended first action is a mobile checkout diagnostic and simplification experiment. In parallel, acquisition reviews should pair volume with 30-day purchase rate and revenue per acquired user. Early comparison of two or more offers is a useful activation signal (51.8% versus 38.1% purchase rate; adjusted odds ratio 1.72, 95% CI 1.64–1.82), but it should be tested as a product mechanism rather than treated as causal.
+The recommended first action remains a mobile checkout diagnostic. In parallel, acquisition reviews should pair volume with 30-day purchase rate and revenue per acquired user. A maturity-controlled sensitivity analysis finds that subsequent 14-day purchasing rises gradually with first-session offer depth—from 6.1% at zero views to 8.2% at 3+ views. This supports deeper exploration as an early behavioral signal, but not `2+ views` as a uniquely validated activation threshold.
 
 ![User funnel](outputs/figures/funnel.png)
 
@@ -40,7 +40,7 @@ The observation period is 1 January–30 June 2024. The generator's embedded mec
 | Checkout completion | Purchasers / checkout starters | Isolates the post-checkout loss point |
 | Revenue per acquired user | Revenue / acquired users | Connects channel volume and quality to value |
 | 60-day repeat rate | Buyers with a second order within 60 days / first-time buyers with a full window | Avoids penalizing recent buyers with incomplete follow-up |
-| Activation signal | Two or more offer views in the first session | Fixed before the outcome and interpretable as early comparison behavior |
+| Candidate early signal | First-session offer depth: 0, 1, 2, or 3+ views | Tested against purchases after that session and within a complete 14-day window |
 
 The main funnel is non-strict and user-level: a user counts as reaching a stage if they reach it at least once. Session-level analysis is used where the question concerns checkout completion in a particular visit.
 
@@ -51,7 +51,7 @@ The main funnel is non-strict and user-level: a user counts as reaching a stage 
 3. Separate acquisition volume from purchase quality and revenue.
 4. Compare channel, device, country, category, and signup cohorts.
 5. test whether aggregate cohort movement is explained by channel mix.
-6. Evaluate an early activation signal with an adjusted logistic model.
+6. Evaluate offer-depth sensitivity against a temporally separated 14-day outcome, then adjust for observed mix.
 7. Translate findings into prioritized decisions and a falsifiable experiment.
 
 SQL builds the reusable funnel, cohort, retention, and segmentation views. Python handles uncertainty intervals, regression, visualization, and cross-checks. Full assumptions are in [methodology.md](docs/methodology.md).
@@ -84,17 +84,17 @@ SQL builds the reusable funnel, cohort, retention, and segmentation views. Pytho
 
 **Product implication.** Instrument checkout steps and failure reasons, review performance and payment-method coverage, then test a smaller mobile checkout change.
 
-### 3. Early offer comparison predicts activation but does not prove a mechanism
+### 3. Deeper early exploration predicts later purchasing, without a unique threshold
 
-**Finding.** Users viewing at least two offers in their first session purchase more often.
+**Finding.** Subsequent purchase rates rise across 0, 1, 2, and 3+ first-session offer views, but the pattern is gradual rather than a sharp step at two.
 
-**Evidence.** Purchase rates are 51.8% for users with two or more early offer views and 38.1% for users with zero or one. After adjustment for channel, device, country, and signup month, the association remains (odds ratio 1.72; 95% CI 1.64–1.82).
+**Evidence.** Among 35,911 users with a full follow-up window, purchase **after the first session and within 14 days of its start** rises from 6.1% (0 views; n=16,657) to 6.8% (1; n=12,548), 7.9% (2; n=4,968), and 8.2% (3+; n=1,738). First-session purchases do not count toward this outcome. The adjusted odds ratios versus zero views are 1.10, 1.26, and 1.30 after controlling for channel, device, country, and signup month.
 
-![Activation signal](outputs/figures/activation.png)
+![Subsequent purchasing by first-session offer depth](outputs/figures/early_offer_depth.png)
 
-**Interpretation.** Comparison may help users build confidence, or high-intent users may simply compare more. Regression cannot distinguish those explanations.
+**Interpretation.** The original `2+` split remains usable as a concise candidate segmentation because the largest incremental separation occurs by two views, but it is not an empirically unique threshold: rates for 2 and 3+ overlap. Comparison may build confidence, or high-intent users may naturally explore more. The synthetic generator also gives persistent latent intent a role in both behaviors; recovering that planted association is not real-world validation.
 
-**Product implication.** Use the behavior for diagnosis and experiment targeting. Do not force extra clicks or redefine activation operationally until a test shows that decision support changes outcomes.
+**Product implication.** Use offer depth as an early engagement marker for diagnosis. Test decision support that makes comparison easier; do not force extra clicks or operationalize an activation metric until randomized evidence shows that the intervention changes downstream outcomes.
 
 ### 4. Retention is meaningful, but not the first intervention point
 
@@ -116,31 +116,33 @@ Among first-time buyers with a complete 60-day follow-up window, 35.4% make a se
 - **Metric:** channel-level 30-day purchase rate and contribution margin per acquired user once spend is joined.
 - **Success test:** stable or improved qualified acquisition at an acceptable marginal cost.
 
-### Priority 3 — test decision support around offer comparison
+### Priority 3 — test decision support around offer exploration
 
-- **Evidence:** a strong, adjusted observational association with first-session comparison.
-- **Expected mechanism:** clearer comparisons may reduce uncertainty and support choice.
+- **Evidence:** a modest, monotonic adjusted association with subsequent 14-day purchase; no unique threshold.
+- **Expected mechanism:** relevant comparisons may reduce uncertainty and support choice without adding friction.
 - **Metric:** purchase within 14 days of first session, with guardrails for time-to-checkout and seller concentration.
-- **Success test:** randomized lift, especially among users who view one offer and then stall.
+- **Success test:** intention-to-treat lift among eligible first-session users, not higher offer-view counts alone.
 
-**What should not trigger an immediate product change:** category conversion differences, the activation association, and the paid-social rate alone. Each lacks at least one critical input—supply context, causal identification, or acquisition cost.
+**What should not trigger an immediate product change:** category conversion differences, the offer-depth association, and the paid-social rate alone. Each lacks at least one critical input—supply context, causal identification, or acquisition cost.
 
-## Proposed experiment: mobile checkout simplification
+## Proposed experiment: first-session offer comparison support
 
-- **Hypothesis:** reducing mobile checkout effort will increase completed purchases among users who start checkout.
-- **Treatment:** a focused mobile flow with fewer fields, clearer progress, persistent order summary, and surfaced supported payment methods.
-- **Control:** current mobile checkout.
-- **Primary metric:** completed purchase per checkout starter, analyzed by assignment (intention to treat).
-- **Guardrails:** payment failure rate, refund/cancellation rate, median order value, duplicate orders, page latency, support contacts, and desktop conversion.
-- **Expected mechanism:** lower cognitive and technical friction between expressed intent and payment.
-- **Segmentation:** pre-specify new versus returning buyer, operating-system family, country, payment method, and category; use interactions as diagnostic, not as a license to cherry-pick.
-- **Major risks:** novelty, instrumentation gaps, a payment-provider outage, cross-device switching, or faster checkout increasing low-quality/accidental orders.
+- **Hypothesis:** helping new users compare relevant offers will reduce decision uncertainty and increase subsequent 14-day purchasing.
+- **Treatment:** a lightweight comparison module after the first offer view, showing a small set of relevant alternatives and decision-relevant attributes without requiring extra navigation.
+- **Control:** current offer-view experience.
+- **Randomization unit:** user, assigned on the first eligible offer view and held consistently across devices where identity permits.
+- **Eligibility:** newly acquired users in their first session who view one offer, excluding employees, bots, and users already assigned to conflicting tests.
+- **Primary metric:** purchase after the assignment session and within 14 days of session start.
+- **Analysis population:** all assigned eligible users by original assignment (intention to treat), regardless of whether treatment users engage with the module.
+- **Guardrails:** checkout-start rate, time to checkout, bounce rate, page latency, order value, refund/cancellation rate, and seller/category concentration.
+- **Expected mechanism:** clearer comparison reduces uncertainty; offer views themselves are not the success metric.
+- **Major risks:** added choice overload, slower pages, substitution toward a narrow seller set, or treatment contamination across devices.
 
-No experiment result is claimed. Before launch, use baseline completion and a product-owned minimum detectable effect to set sample size and duration, covering at least one full weekly cycle.
+No experiment result is claimed. Before launch, use the baseline 14-day purchase rate and a product-owned minimum detectable effect to set sample size and duration; enrollment and follow-up must cover complete weekly cycles plus the full outcome window.
 
 ## Limitations
 
-- Synthetic behavior can illustrate analytical reasoning but cannot validate a real marketplace decision.
+- Synthetic behavior can illustrate analytical reasoning but cannot validate a real marketplace mechanism. In the generator, persistent latent intent influences both exploration and later purchase opportunities; offer depth also directly affects same-session checkout probability, which is why same-session purchases are excluded from the candidate-signal outcome.
 - Channel spend, margin, refunds, seller quality, price competitiveness, inventory, payment method, OS, and page-performance data are absent.
 - Device and behavioral segments are observational; adjusted models only address measured confounders.
 - The six-month window limits seasonal inference and longer-term retention.

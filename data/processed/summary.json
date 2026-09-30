@@ -13,12 +13,59 @@
   "mobile_checkout_completion": 0.6623586429725363,
   "desktop_checkout_completion": 0.8444950645406226,
   "device_test_p": 1.3117467116586588e-302,
-  "activation_purchase_rate_low": 0.3808075221238938,
-  "activation_purchase_rate_high": 0.5182403433476395,
-  "activation_adjusted_odds_ratio": 1.7238326472354242,
-  "activation_or_ci": [
-    1.6357232968198048,
-    1.8166880678731623
-  ],
+  "activation_eligible_users_14d": 35911,
+  "activation_immature_excluded": 3974,
+  "activation_no_observed_session_excluded": 115,
+  "activation_same_session_buyers_excluded_from_outcome": 8926,
+  "offer_depth_groups": {
+    "0": {
+      "users": 16657,
+      "user_share": 0.46384116287488514,
+      "subsequent_purchase_rate_14d": 0.0612955514198235,
+      "ci_low": 0.05775291142018709,
+      "ci_high": 0.06504050136875629
+    },
+    "1": {
+      "users": 12548,
+      "user_share": 0.34941939795605803,
+      "subsequent_purchase_rate_14d": 0.06837743066624163,
+      "ci_low": 0.06409206856460259,
+      "ci_high": 0.07292699643060896
+    },
+    "2": {
+      "users": 4968,
+      "user_share": 0.1383420121968199,
+      "subsequent_purchase_rate_14d": 0.07890499194847021,
+      "ci_low": 0.07172950359168459,
+      "ci_high": 0.08673121647630791
+    },
+    "3+": {
+      "users": 1738,
+      "user_share": 0.048397426972236916,
+      "subsequent_purchase_rate_14d": 0.08170310701956271,
+      "ci_low": 0.0697290125237035,
+      "ci_high": 0.09552229390967137
+    }
+  },
+  "offer_depth_adjusted_odds_ratios": {
+    "C(offer_depth_group, Treatment(reference='0'))[T.1]": {
+      "odds_ratio": 1.1028049356030918,
+      "ci_low": 1.0033561329582843,
+      "ci_high": 1.212110721249863,
+      "p_value": 0.04241245991279237
+    },
+    "C(offer_depth_group, Treatment(reference='0'))[T.2]": {
+      "odds_ratio": 1.2604782108698591,
+      "ci_low": 1.1158115445378998,
+      "ci_high": 1.4239011308452327,
+      "p_value": 0.00019785444933088738
+    },
+    "C(offer_depth_group, Treatment(reference='0'))[T.3+]": {
+      "odds_ratio": 1.2965035433493133,
+      "ci_low": 1.0782544940871097,
+      "ci_high": 1.5589282930283124,
+      "p_value": 0.0057607830981856395
+    }
+  },
   "repeat_purchase_rate_60d": 0.3544947904046523
 }

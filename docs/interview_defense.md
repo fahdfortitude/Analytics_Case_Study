@@ -20,7 +20,7 @@
 - **Can conclude:** where observed reach falls and which stages merit deeper analysis.
 - **Cannot conclude:** that every drop is product failure or that event order is always canonical.
 - **Additional data:** event QA, path analysis, page exposure, client/server reconciliation.
-- **Likely challenge:** “Why include offer view?” It represents evaluation depth distinct from browsing and provides a candidate activation signal.
+- **Likely challenge:** “Why include offer view?” It represents evaluation depth distinct from browsing and provides a candidate early behavioral signal.
 
 ## Decision 3: isolate checkout completion at session level
 
@@ -44,16 +44,18 @@
 - **Additional data:** fixed-window outcomes, campaign metadata, seasonality history, standardized rates.
 - **Likely challenge:** “Is this Simpson’s paradox?” It is the same composition-risk family; the key point is that aggregate movement differs from within-segment interpretation.
 
-## Decision 5: define activation from first-session offer comparison
+## Decision 5: evaluate offer depth as a candidate early signal
 
-- **Why:** it is early, behaviorally interpretable, and measured before the later outcome.
-- **Denominator:** acquired users with observable first-session behavior.
-- **Segmentation:** regression adjusts for channel, device, geography, and cohort.
-- **Alternative interpretation:** underlying intent causes both deeper comparison and purchase.
-- **Can conclude:** early comparison is a strong predictive signal after measured adjustment.
-- **Cannot conclude:** inducing two offer views will increase purchases.
-- **Additional data:** experiment assignment, search quality, offer diversity, price dispersion, intent survey.
-- **Likely challenge:** “Why two?” It is an interpretable threshold selected for the hypothesis; sensitivity across one, two, and three views should precede operational use.
+- **Why:** offer depth is early and interpretable, but the analysis should not assume where a useful threshold lies.
+- **Denominator:** 35,911 users with an observed first session and a complete 14-day follow-up window.
+- **Outcome:** purchase after session one ends and within 14 days of its start; same-session purchases do not qualify.
+- **Grouping:** 0, 1, 2, and 3+ views; the upper tail is pooled because only 4.8% reach 3+.
+- **Segmentation:** regression adjusts for channel, device, geography, and signup cohort.
+- **Alternative interpretation:** persistent purchase intent causes both deeper comparison and later purchase.
+- **Can conclude:** rates rise gradually with depth and the association survives measured adjustment.
+- **Cannot conclude:** two views are a unique threshold or that inducing views will cause purchases.
+- **Additional data:** randomized exposure, comparison-module engagement, offer relevance/diversity, price dispersion, and intent research.
+- **Likely challenge:** “Did 2+ survive?” It remains a practical segmentation, but not a validated activation cutoff; 2 and 3+ rates are similar and their intervals overlap.
 
 ## Decision 6: use 60-day repeat purchase with eligibility censoring
 
@@ -79,19 +81,19 @@
 
 ## Challenging interview questions and suggested answers
 
-1. **Why is the purchase rate unusually high?** The synthetic marketplace represents registered/acquired users rather than anonymous visits and allows multiple sessions. Absolute rates are not benchmarks; segment relationships and decision logic are the analytical focus.
-2. **How did you prevent leakage in activation?** The behavior is restricted to the first session, while purchase is a later user outcome. Same-session purchases can still follow the behavior, which is valid temporally but not causal.
-3. **Why logistic regression instead of a predictive model?** The question is whether an interpretable association survives observed mix adjustment, not whether a black-box model maximizes prediction.
-4. **How would you explain the odds ratio to a PM?** Holding measured segment mix constant, early comparers have about 1.72 times the odds of purchase; that is not the same as a 72% probability lift.
-5. **Why report a p-value for device when the sample is synthetic and large?** It demonstrates uncertainty practice and rules out sampling noise within the constructed population sample, but practical magnitude and bias matter more.
-6. **What would make you reverse the mobile recommendation?** Evidence that the gap is mostly cross-device completion, payment mix, tracking loss, or that the feasible improvement is below cost/risk.
-7. **Would you cut paid social?** No. I would join spend and contribution margin, use fixed-window value, and test incrementality. Low conversion can still be economical.
-8. **How would you handle attribution?** Define an attribution window, compare first/last-touch sensitivity, retain an unattributed group, and prefer incrementality tests for budget decisions.
-9. **Why not use revenue as the primary funnel outcome?** Revenue is skewed by repeat orders and basket size. Unique purchase is cleaner for diagnosing first-value creation; revenue per acquired user is a companion metric.
-10. **How would you test Simpson’s paradox directly?** Compare crude and standardized rates using fixed channel weights, then inspect within-channel cohort trends and interactions.
-11. **What instrumentation would you add?** Checkout step exposure/completion, validation errors, payment method/provider response, latency, cross-device continuation, and cancellation/refund outcomes.
-12. **How would you size the experiment?** Use current mobile checkout completion, business minimum detectable lift, two-sided alpha, target power, expected eligibility, and cluster/identity rules; then span complete weekly cycles.
-13. **Why intention-to-treat?** It preserves randomization and measures the effect of offering the new experience, avoiding bias from post-assignment engagement.
-14. **What is the biggest synthetic-data limitation?** The same author creates and analyzes the behavioral world, so realism and unknown confounding are constrained. The work demonstrates method, not external validity.
-15. **What would you do next with one week?** Validate instrumentation, add cross-device and payment data, standardize cohort rates, interview a small set of mobile abandoners, and write the experiment decision memo.
+1. **Why was 2+ originally chosen?** It was an interpretable hypothesis for comparison behavior, not a data-derived optimum. The sensitivity analysis was required before treating it as more than a candidate split.
+2. **Why test 0, 1, 2, and 3+ separately?** It reveals whether there is a step change or a gradient. Pooling 3+ stabilizes a small upper tail while preserving the important depth pattern.
+3. **Did the 2+ threshold survive?** Only as a convenient segmentation. Rates rise from 6.1% to 6.8%, 7.9%, and 8.2%; there is no unique cliff, and 2 versus 3+ is not clearly different.
+4. **Why exclude purchases in the first session?** They can occur after the measured clicks but belong to the same journey and are directly influenced by offer depth in the generator. A later outcome provides cleaner temporal ordering.
+5. **Why use 14 days?** It is long enough to capture near-term return behavior while retaining most cohorts and staying relevant to an activation hypothesis. It was specified before inspecting the refined result.
+6. **How were immature users handled?** Users whose first session began within 14 days of collection ending were excluded, not labeled non-purchasers; 3,974 observed users were removed on that basis.
+7. **Does exploration cause later purchase?** No. The analysis shows temporal association. Randomization is needed to estimate whether an intervention that facilitates comparison changes purchase behavior.
+8. **Could intent explain both?** Yes. That is the leading alternative explanation, and the generator explicitly contains persistent latent intent.
+9. **What does synthetic construction imply?** Recovering a planted association validates the workflow, not the mechanism. The data cannot establish external validity or a real operational activation metric.
+10. **When would you call this an activation metric?** After replicated observational stability, clear instrumentation, incremental experimental impact, and evidence that optimizing it does not harm downstream value or marketplace balance.
+11. **How would you validate it in a real product?** Instrument first-session comparison, replicate by cohort and market, run qualitative research, then randomize a low-friction decision-support feature and analyze 14-day purchase by assignment.
+12. **Why logistic regression?** The question is whether an interpretable association survives observed mix adjustment, not whether a complex model maximizes prediction.
+13. **How do you explain the adjusted result?** Relative to zero views and holding measured mix constant, the odds ratios are 1.10, 1.26, and 1.30 for 1, 2, and 3+ views. They are not causal lifts.
+14. **Would you cut paid social?** No. I would join spend and contribution margin, use fixed-window value, and test incrementality. Low conversion can still be economical.
+15. **Why intention-to-treat in the proposed experiment?** It preserves randomization and measures the effect of offering comparison support, rather than selecting users who choose to engage with it.
 
