@@ -114,7 +114,6 @@ def run():
     first["repeat_60d"] = first.next_order.le(first.order_timestamp + pd.Timedelta(days=60))
     repeat_rate = first.repeat_60d.mean()
 
-    # Figures
     fig, ax = plt.subplots(figsize=(9, 5))
     colors = ["#173F5F", "#20639B", "#3CAEA3", "#F6D55C", "#ED553B"]
     ax.barh(funnel.stage.str.replace("_", " ").str.title()[::-1], funnel.users[::-1], color=colors[::-1])

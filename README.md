@@ -20,7 +20,7 @@ The investigation separates three possibilities: lower-quality acquisition, broa
 
 ## Dataset
 
-This project uses **synthetic data generated specifically for this portfolio case study**. It contains no proprietary, client, or real-user information. The generator uses a fixed seed and models behavior sequentially: acquisition affects latent intent and device mix; users create sessions; sessions produce exploration; exploration can lead to checkout; completed checkouts create orders and influence later behavior.
+All data are synthetic and generated with a fixed seed. The results do not describe real marketplace users. The generator models acquisition, latent intent, sessions, exploration, checkout, purchase, and repeat behavior sequentially; its parameters remain visible in `src/generate_data.py`.
 
 | Table | Grain | Rows | Selected fields |
 |---|---:|---:|---|
@@ -28,7 +28,7 @@ This project uses **synthetic data generated specifically for this portfolio cas
 | `events` | One row per behavioral event | 468,253 | session, timestamp, event, listing, category |
 | `orders` | One row per completed order | 25,472 | value, category, first-purchase flag |
 
-The observation period is 1 January–30 June 2024. The generator's embedded mechanics are intentionally not documented here; the analytical claims below come from the same observable tables available to an analyst.
+The observation period is 1 January–30 June 2024.
 
 ## Metric definitions
 
@@ -46,55 +46,35 @@ The main funnel is non-strict and user-level: a user counts as reaching a stage 
 
 ## Analytical approach
 
-1. Establish a metric contract before segmenting.
-2. Locate funnel loss at both user and session level.
-3. Separate acquisition volume from purchase quality and revenue.
-4. Compare channel, device, country, category, and signup cohorts.
-5. test whether aggregate cohort movement is explained by channel mix.
-6. Evaluate offer-depth sensitivity against a temporally separated 14-day outcome, then adjust for observed mix.
-7. Translate findings into prioritized decisions and a falsifiable experiment.
-
-SQL builds the reusable funnel, cohort, retention, and segmentation views. Python handles uncertainty intervals, regression, visualization, and cross-checks. Full assumptions are in [methodology.md](docs/methodology.md).
+User-level metrics assess acquisition quality and funnel reach; session-level transitions isolate checkout friction; maturity-controlled cohorts support conversion and repeat-purchase comparisons. First-session offer depth is evaluated against purchases occurring after that session and within a complete 14-day window. SQL contains the funnel, cohort, retention, and segmentation queries; Python handles uncertainty, adjustment, visualization, and cross-checks. Further detail is in [methodology.md](docs/methodology.md).
 
 ## Key findings
 
 ### 1. Acquisition growth is increasingly concentrated in a lower-quality channel
 
-**Finding.** Paid social contributes substantial volume but has the lowest downstream purchase rate.
-
-**Evidence.** Its 22.7% user purchase rate is less than half direct traffic's 51.6%. The acquisition mix moves toward paid social across later cohorts while aggregate cohort conversion declines.
+Paid social contributes substantial volume but has the lowest downstream purchase rate. Its 22.7% user purchase rate is less than half direct traffic's 51.6%, and later cohorts contain a growing paid-social share.
 
 ![Channel conversion](outputs/figures/channel_conversion.png)
 
 ![Cohort mix](outputs/figures/cohort_mix.png)
 
-**Interpretation.** The portfolio-level decline is partly mix-driven. A channel can be effective on marginal acquisition cost despite a lower conversion rate, but cost data is unavailable here.
-
-**Product implication.** Do not optimize acquisition on signups alone. Report 30-day purchase rate and revenue per acquired user by channel and cohort; join spend before making budget changes.
+The aggregate decline is partly a mix effect rather than broad deterioration within every channel. Acquisition reviews should include 30-day purchase rate and revenue per acquired user alongside volume. Paid social should not be reduced without spend, marginal CAC, and contribution-margin data.
 
 ### 2. Mobile checkout completion is the highest-priority product friction
 
-**Finding.** The device gap widens after checkout begins.
-
-**Evidence.** 66.2% of mobile checkout sessions complete versus 84.4% on desktop. The difference is precise in this dataset (two-proportion test p < 0.001), but precision does not remove selection bias.
+The device gap widens after checkout begins: 66.2% of mobile checkout sessions complete versus 84.4% on desktop (p < 0.001).
 
 ![Device checkout](outputs/figures/device_checkout.png)
 
-**Interpretation.** Form complexity, payment support, page performance, or interruption could explain the gap. Mobile users may also differ in unobserved intent.
-
-**Product implication.** Instrument checkout steps and failure reasons, review performance and payment-method coverage, then test a smaller mobile checkout change.
+The result prioritizes mobile checkout for diagnosis but does not identify the mechanism. Form complexity, payment coverage, performance, interruption, or unobserved user differences could contribute. The next step is step-level instrumentation, failure-reason and performance review, followed by a focused mobile experiment.
 
 ### 3. Deeper early exploration predicts later purchasing, without a unique threshold
 
-**Finding.** Subsequent purchase rates rise across 0, 1, 2, and 3+ first-session offer views, but the pattern is gradual rather than a sharp step at two.
-
-**Evidence.** Among 35,911 users with a full follow-up window, purchase **after the first session and within 14 days of its start** rises from 6.1% (0 views; n=16,657) to 6.8% (1; n=12,548), 7.9% (2; n=4,968), and 8.2% (3+; n=1,738). First-session purchases do not count toward this outcome. The adjusted odds ratios versus zero views are 1.10, 1.26, and 1.30 after controlling for channel, device, country, and signup month.
+Among 35,911 users with a complete follow-up window, purchase **after the first session and within 14 days of its start** rises from 6.1% (0 views; n=16,657) to 6.8% (1; n=12,548), 7.9% (2; n=4,968), and 8.2% (3+; n=1,738). First-session purchases do not count toward this outcome. Adjustment for channel, device, country, and signup month modestly weakens the contrast but preserves the ordering: odds ratios versus zero views are 1.10, 1.26, and 1.30.
 
 ![Subsequent purchasing by first-session offer depth](outputs/figures/early_offer_depth.png)
 
-**Interpretation.** The original `2+` split remains usable as a concise candidate segmentation because the largest incremental separation occurs by two views, but it is not an empirically unique threshold: rates for 2 and 3+ overlap. Comparison may build confidence, or high-intent users may naturally explore more. The synthetic generator also gives persistent latent intent a role in both behaviors; recovering that planted association is not real-world validation.
-
-**Product implication.** Use offer depth as an early engagement marker for diagnosis. Test decision support that makes comparison easier; do not force extra clicks or operationalize an activation metric until randomized evidence shows that the intervention changes downstream outcomes.
+The relationship is gradual, and rates for 2 and 3+ views overlap. `2+` remains a practical candidate segmentation, not a uniquely supported threshold or operational activation metric. Persistent latent intent can explain both exploration and later purchase, so the association supports a randomized decision-support test—not forced additional clicks or a causal claim.
 
 ### 4. Retention is meaningful, but not the first intervention point
 
@@ -102,28 +82,11 @@ Among first-time buyers with a complete 60-day follow-up window, 35.4% make a se
 
 ## Recommended actions
 
-### Priority 1 — diagnose and test mobile checkout friction
+1. **Diagnose mobile checkout first.** The 18.2-point completion gap occurs closest to value. Instrument step abandonment, payment failures, and performance, then test a focused change using completion per mobile checkout starter as the primary metric and order value, refunds, and payment failures as guardrails.
+2. **Add acquisition-quality reporting.** Pair channel volume with 30-day purchase rate, revenue per acquired user, and—once spend is joined—contribution margin and marginal CAC. The current evidence is insufficient to reduce paid-social investment.
+3. **Test comparison support.** Deeper early exploration is a candidate behavioral signal. A randomized intervention should test whether relevant comparison support increases 14-day purchase without increasing time to checkout or concentrating demand among fewer sellers.
 
-- **Evidence:** 18.2 percentage-point mobile completion gap among checkout sessions.
-- **Expected mechanism:** fewer form and payment failures allow existing purchase intent to complete.
-- **Metric:** completed purchase per mobile checkout starter.
-- **Success test:** statistically and practically meaningful lift without lower order value, higher refunds, or increased payment failures.
-
-### Priority 2 — change acquisition quality reporting
-
-- **Evidence:** paid social growth coincides with a 22.7% purchase rate and £22.97 revenue per acquired user.
-- **Expected mechanism:** teams optimize for users likely to create value, not raw traffic.
-- **Metric:** channel-level 30-day purchase rate and contribution margin per acquired user once spend is joined.
-- **Success test:** stable or improved qualified acquisition at an acceptable marginal cost.
-
-### Priority 3 — test decision support around offer exploration
-
-- **Evidence:** a modest, monotonic adjusted association with subsequent 14-day purchase; no unique threshold.
-- **Expected mechanism:** relevant comparisons may reduce uncertainty and support choice without adding friction.
-- **Metric:** purchase within 14 days of first session, with guardrails for time-to-checkout and seller concentration.
-- **Success test:** intention-to-treat lift among eligible first-session users, not higher offer-view counts alone.
-
-**What should not trigger an immediate product change:** category conversion differences, the offer-depth association, and the paid-social rate alone. Each lacks at least one critical input—supply context, causal identification, or acquisition cost.
+Category differences, the offer-depth association, and paid-social conversion alone should not trigger immediate product changes; each lacks supply context, causal identification, or acquisition economics.
 
 ## Proposed experiment: first-session offer comparison support
 
@@ -159,7 +122,7 @@ No experiment result is claimed. Before launch, use the baseline 14-day purchase
 ├── sql/
 ├── src/{generate_data.py,metrics.py,run_analysis.py,build_notebook.py,validate_project.py}
 ├── outputs/figures/
-└── docs/{methodology.md,interview_defense.md}
+└── docs/methodology.md
 ```
 
 ## Reproducing the analysis
