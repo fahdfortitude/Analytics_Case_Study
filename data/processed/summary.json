@@ -1,0 +1,24 @@
+{
+  "users": 40000,
+  "events": 468253,
+  "orders": 25472,
+  "purchasers": 16257,
+  "purchase_rate": 0.406425,
+  "checkout_users": 21024,
+  "checkout_completion_user": 0.7732591324200914,
+  "paid_social_users": 9603,
+  "paid_social_purchase_rate": 0.22659585546183483,
+  "direct_purchase_rate": 0.5157732447817837,
+  "paid_social_revenue_per_user": 22.96862334687077,
+  "mobile_checkout_completion": 0.6623586429725363,
+  "desktop_checkout_completion": 0.8444950645406226,
+  "device_test_p": 1.3117467116586588e-302,
+  "activation_purchase_rate_low": 0.3808075221238938,
+  "activation_purchase_rate_high": 0.5182403433476395,
+  "activation_adjusted_odds_ratio": 1.7238326472354242,
+  "activation_or_ci": [
+    1.6357232968198048,
+    1.8166880678731623
+  ],
+  "repeat_purchase_rate_60d": 0.3544947904046523
+}
